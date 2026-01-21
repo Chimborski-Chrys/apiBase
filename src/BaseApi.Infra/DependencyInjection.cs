@@ -23,7 +23,16 @@ public static class DependencyInjection
         }
 
         services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseNpgsql(connectionString));
+            options.UseNpgsql(connectionString, npgsqlOptions =>
+            {
+                // Aumentar timeout de comando para 60 segundos (padrão é 30)
+                npgsqlOptions.CommandTimeout(60);
+                // Tentar reconectar automaticamente em caso de falha
+                npgsqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(10),
+                    errorCodesToAdd: null);
+            }));
 
         // Registrar repositórios
         services.AddScoped<IUserRepository, UserRepository>();
