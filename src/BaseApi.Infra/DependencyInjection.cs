@@ -36,6 +36,7 @@ public static class DependencyInjection
 
         // Registrar repositórios
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IAppSettingsRepository, AppSettingsRepository>();
 
         return services;
     }
