@@ -2,6 +2,7 @@ using BaseApi.Application.DTOs;
 using BaseApi.Application.Interfaces;
 using BaseApi.Domain.Entities;
 using BCrypt.Net;
+using Microsoft.Extensions.Configuration;
 
 namespace BaseApi.Application.Services;
 
@@ -9,11 +10,13 @@ public class AuthService : IAuthService
 {
     private readonly IUserRepository _userRepository;
     private readonly ITokenService _tokenService;
+    private readonly IConfiguration _configuration;
 
-    public AuthService(IUserRepository userRepository, ITokenService tokenService)
+    public AuthService(IUserRepository userRepository, ITokenService tokenService, IConfiguration configuration)
     {
         _userRepository = userRepository;
         _tokenService = tokenService;
+        _configuration = configuration;
     }
 
     public async Task<AuthResponse?> LoginAsync(LoginRequest request)
@@ -27,7 +30,7 @@ public class AuthService : IAuthService
             return null;
 
         var token = _tokenService.GenerateToken(user);
-        var expireMinutes = 60; // Default
+        var expireMinutes = int.Parse(_configuration["Jwt:ExpireMinutes"] ?? "60");
 
         return new AuthResponse
         {
@@ -57,7 +60,7 @@ public class AuthService : IAuthService
         await _userRepository.AddAsync(user);
 
         var token = _tokenService.GenerateToken(user);
-        var expireMinutes = 60; // Default
+        var expireMinutes = int.Parse(_configuration["Jwt:ExpireMinutes"] ?? "60");
 
         return new AuthResponse
         {
