@@ -70,11 +70,39 @@ public class UsersController : ControllerBase
     /// Cria um novo usuário (autenticação obrigatória)
     /// </summary>
     [HttpPost]
-    [Authorize]
-    public async Task<ActionResult<User>> CreateUser(User user)
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<User>> CreateUser([FromBody] CreateUserRequest request)
     {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        // Verificar se email já existe
+        var emailExists = await _context.Users
+            .AnyAsync(u => u.Email == request.Email);
+
+        if (emailExists)
+        {
+            return BadRequest(new { message = "Email já está cadastrado" });
+        }
+
+        // Criar hash da senha
+        var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
+
+        // Criar novo usuário
+        var user = new User
+        {
+            Name = request.Name,
+            Email = request.Email,
+            PasswordHash = passwordHash,
+            Role = request.Role,
+            IsActive = true
+        };
+
         _context.Users.Add(user);
         await _context.SaveChangesAsync();
+
+        // Remover senha do retorno
+        user.PasswordHash = "[PROTECTED]";
 
         return CreatedAtAction(nameof(GetUser), new { id = user.Id }, user);
     }
