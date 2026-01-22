@@ -1,5 +1,6 @@
 using BaseApi.Application.DTOs;
 using BaseApi.Application.Interfaces;
+using BaseApi.Infra.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -10,10 +11,12 @@ namespace BaseApi.Api.Controllers;
 public class AppSettingsController : ControllerBase
 {
     private readonly IAppSettingsService _settingsService;
+    private readonly ApplicationDbContext _context;
 
-    public AppSettingsController(IAppSettingsService settingsService)
+    public AppSettingsController(IAppSettingsService settingsService, ApplicationDbContext context)
     {
         _settingsService = settingsService;
+        _context = context;
     }
 
     /// <summary>
@@ -32,7 +35,8 @@ public class AppSettingsController : ControllerBase
     }
 
     /// <summary>
-    /// Atualiza as configurações da aplicação (apenas admin)
+    /// Atualiza as configurações da aplicação (apenas admin raiz)
+    /// Somente o primeiro admin (sem CreatedById) pode alterar as configurações do sistema
     /// </summary>
     [HttpPut]
     [Authorize(Roles = "Admin")]
@@ -40,6 +44,20 @@ public class AppSettingsController : ControllerBase
     {
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
+
+        // Obter ID do usuário autenticado
+        var currentUserId = Guid.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "");
+
+        // Buscar usuário atual para verificar se é admin raiz
+        var currentUser = await _context.Users.FindAsync(currentUserId);
+        if (currentUser == null)
+            return Unauthorized();
+
+        // Apenas admin raiz (sem CreatedById) pode alterar configurações do sistema
+        if (currentUser.CreatedById.HasValue)
+        {
+            return Forbid(); // 403 Forbidden
+        }
 
         try
         {
