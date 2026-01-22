@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using BaseApi.Application;
 using BaseApi.Infra;
 using DotNetEnv;
@@ -45,7 +46,12 @@ else
 }
 
 // Add services to the container
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        // Permitir serialização de enums como strings (ex: "Admin" em vez de 0)
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {

@@ -38,7 +38,8 @@ public class AuthService : IAuthService
             Email = user.Email,
             Name = user.Name,
             Role = user.Role,
-            ExpiresAt = DateTime.UtcNow.AddMinutes(expireMinutes)
+            ExpiresAt = DateTime.UtcNow.AddMinutes(expireMinutes),
+            CreatedById = user.CreatedById
         };
     }
 
@@ -68,7 +69,8 @@ public class AuthService : IAuthService
             Email = user.Email,
             Name = user.Name,
             Role = user.Role,
-            ExpiresAt = DateTime.UtcNow.AddMinutes(expireMinutes)
+            ExpiresAt = DateTime.UtcNow.AddMinutes(expireMinutes),
+            CreatedById = user.CreatedById
         };
     }
 }
