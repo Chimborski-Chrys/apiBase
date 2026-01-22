@@ -1,248 +1,374 @@
-# Base API
+# Base API - .NET 8 + PostgreSQL
 
-Template base para desenvolvimento de APIs utilizando .NET 8, PostgreSQL e Clean Architecture.
-
-## Arquitetura
-
-Este projeto segue os princípios de **Clean Architecture**, organizando o código em camadas bem definidas:
-
-```
-src/
-├── BaseApi.Domain/          # Entidades, Enums e Regras de Negócio
-├── BaseApi.Application/     # Casos de Uso e Interfaces
-├── BaseApi.Infra/          # Implementações de Infraestrutura (DbContext, Repositories)
-└── BaseApi.Api/            # Controllers, Endpoints e Configurações
-```
+API completa com autenticação JWT, RBAC, sistema White-Label e hierarquia de administradores usando Clean Architecture.
 
 ## Stack Tecnológica
 
-- **.NET 8** (C#)
-- **PostgreSQL** (via Entity Framework Core)
-- **Npgsql** (Driver PostgreSQL para .NET)
+- **.NET 8** (C# 12)
+- **PostgreSQL** (Supabase)
+- **Entity Framework Core** (ORM + Migrations)
+- **Npgsql** (PostgreSQL Driver)
+- **BCrypt.Net** (Hash de senhas)
+- **JWT Bearer** (Autenticação)
 - **Swagger/OpenAPI** (Documentação automática)
-- **Clean Architecture** (Separação de responsabilidades)
+- **Clean Architecture** (4 camadas)
+- **DotNetEnv** (Variáveis de ambiente)
 
-## Segurança
+## Arquitetura Clean Architecture
 
-A Connection String do banco de dados **NÃO está armazenada no código** ou no `appsettings.json` por questões de segurança.
-
-Utilizamos o recurso **User Secrets** do .NET, que armazena informações sensíveis de forma segura fora do repositório Git.
-
-## Como Rodar pela Primeira Vez
-
-### Pré-requisitos
-
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-- [PostgreSQL](https://www.postgresql.org/download/) (versão 12 ou superior)
-- Um banco de dados PostgreSQL criado
-
-### 1. Configure a Connection String
-
-Execute o script de setup de acordo com seu sistema operacional:
-
-**Windows (PowerShell):**
-```powershell
-.\setup-dev.ps1
+```
+src/
+├── BaseApi.Domain/          # Entidades, Enums, Regras de Negócio
+│   ├── Entities/
+│   │   ├── BaseEntity.cs           # Id, CreatedAt, UpdatedAt
+│   │   ├── User.cs                 # Usuários + Hierarquia (CreatedById)
+│   │   └── AppSettings.cs          # Configurações White-Label
+│   └── Enums/
+│       └── UserRole.cs             # User, Admin, Moderator
+│
+├── BaseApi.Application/     # DTOs, Services, Interfaces
+│   ├── DTOs/
+│   │   ├── AuthResponse.cs         # Login response (token, role, createdById)
+│   │   ├── CreateUserRequest.cs    # DTO para criação com validações
+│   │   ├── UpdateUserRequest.cs    # DTO para atualização
+│   │   └── AppSettingsResponse.cs  # DTO para configurações white-label
+│   ├── Services/
+│   │   ├── AuthService.cs          # Login/Register + JWT generation
+│   │   ├── TokenService.cs         # JWT token creation
+│   │   └── AppSettingsService.cs   # Gerenciamento de configurações
+│   └── Interfaces/
+│
+├── BaseApi.Infra/          # DbContext, Repositories, Migrations
+│   ├── Data/
+│   │   ├── ApplicationDbContext.cs # EF Core DbContext
+│   │   └── DatabaseSeeder.cs       # Seed inicial (admin + settings)
+│   ├── Repositories/               # User + AppSettings Repositories
+│   └── DependencyInjection.cs      # Registro de serviços
+│
+└── BaseApi.Api/            # Controllers, Program.cs, Configurações
+    ├── Controllers/
+    │   ├── AuthController.cs       # POST /login, /register
+    │   ├── UsersController.cs      # CRUD com hierarquia
+    │   └── AppSettingsController.cs # GET/PUT configurações (admin raiz)
+    └── Program.cs                  # JWT, CORS, Swagger, Enum serialization
 ```
 
-**Linux/macOS (Bash):**
+## Features Principais
+
+### 🔐 Autenticação JWT + RBAC
+- **JWT tokens** com expiração configurável (8 horas)
+- **BCrypt** para hash de senhas
+- **Role-Based Access Control** (Admin, User, Moderator)
+- **Bearer token** em todos os endpoints protegidos
+- **Claims-based authentication** (NameIdentifier, Role, Email)
+
+### 👥 Hierarquia de Administradores
+- **Admin Raiz** - Primeiro admin criado (sem `CreatedById`)
+  - Vê todos os usuários
+  - Cria novos admins/usuários
+  - Acessa configurações do sistema
+- **Admins Secundários** - Criados por outros admins
+  - Veem apenas usuários que criaram
+  - Criam usuários vinculados a eles
+  - Não podem editar/excluir quem os criou
+  - Sem acesso às configurações do sistema
+
+### 🎨 Sistema White-Label
+- **Configurações dinâmicas** via banco de dados
+- **BrandName** - Nome da marca
+- **LogoUrl** - URL da logo
+- **PrimaryColor, SecondaryColor, AccentColor** - Cores HEX
+- **Endpoint público** - GET /api/AppSettings (sem auth)
+- **Endpoint restrito** - PUT /api/AppSettings (apenas admin raiz)
+
+### 🗄️ Banco de Dados
+- **PostgreSQL** via Supabase
+- **Migrations automáticas** na inicialização
+- **Seed automático** - Cria admin padrão e configurações iniciais
+- **Soft delete** - Usuários marcados como `IsActive = false`
+- **Timestamps** - CreatedAt e UpdatedAt em todas entidades
+
+## Estrutura do Banco de Dados
+
+### Users
+| Campo        | Tipo      | Descrição                              |
+|--------------|-----------|----------------------------------------|
+| Id           | Guid      | PK, gerado automaticamente             |
+| Name         | string    | Nome do usuário                        |
+| Email        | string    | Email único                            |
+| PasswordHash | string    | Hash BCrypt da senha                   |
+| Role         | enum      | User, Admin ou Moderator               |
+| IsActive     | bool      | Status ativo/inativo                   |
+| CreatedById  | Guid?     | Referência para quem criou (hierarquia)|
+| CreatedAt    | DateTime  | Data de criação                        |
+| UpdatedAt    | DateTime  | Data de última atualização             |
+
+### AppSettings
+| Campo          | Tipo      | Descrição                    |
+|----------------|-----------|------------------------------|
+| Id             | Guid      | PK, único registro           |
+| BrandName      | string    | Nome da marca/empresa        |
+| LogoUrl        | string?   | URL da logo (opcional)       |
+| PrimaryColor   | string    | Cor primária (HEX)           |
+| SecondaryColor | string    | Cor secundária (HEX)         |
+| AccentColor    | string    | Cor de destaque (HEX)        |
+| CreatedAt      | DateTime  | Data de criação              |
+| UpdatedAt      | DateTime  | Data de atualização          |
+
+## Instalação e Configuração
+
+### 1. Clonar e instalar dependências
 ```bash
-chmod +x setup-dev.sh
-./setup-dev.sh
-```
-
-O script irá solicitar a Connection String do PostgreSQL. Exemplo:
-
-```
-Host=localhost;Port=5432;Database=baseapi_dev;Username=postgres;Password=sua_senha
-```
-
-### 2. Restaure as Dependências
-
-```bash
+cd src/BaseApi.Api
 dotnet restore
 ```
 
-### 3. Crie e Aplique as Migrations
+### 2. Configurar variáveis de ambiente
+Crie um arquivo `.env` na raiz do projeto (pasta `baseApi/`):
 
-Navegue até o projeto da API:
+```env
+# PostgreSQL Connection (Supabase)
+CONNECTIONSTRINGS__DEFAULTCONNECTION=Host=aws-1-sa-east-1.pooler.supabase.com;Port=6543;Database=postgres;Username=postgres.xyz;Password=suasenha;SSL Mode=Prefer;Trust Server Certificate=true;Timeout=60;Connection Idle Lifetime=300;Keepalive=30;Multiplexing=false
 
-```bash
-cd src/BaseApi.Api
+# JWT Configuration
+JWT__SECRET=sua_chave_secreta_minimo_32_caracteres
+JWT__ISSUER=BaseApi
+JWT__AUDIENCE=BaseApiUsers
+JWT__EXPIREMINUTES=480
+
+# Admin Padrão (criado automaticamente)
+ADMIN__NAME=Administrador
+ADMIN__EMAIL=admin@admin.com
+ADMIN__PASSWORD=mudar123
 ```
 
-Crie a migration inicial:
-
-```bash
-dotnet ef migrations add InitialCreate --project ../BaseApi.Infra
-```
-
-Aplique a migration ao banco de dados:
-
-```bash
-dotnet ef database update --project ../BaseApi.Infra
-```
-
-### 4. Execute a API
-
+### 3. Rodar a API
 ```bash
 dotnet run
 ```
 
 A API estará disponível em:
-- **Swagger UI:** https://localhost:7000
-- **HTTP:** http://localhost:5000
+- **Swagger UI**: https://localhost:7000
+- **HTTP**: http://localhost:5000
 
-## Estrutura do Banco de Dados
+**Migrations e seed são executados automaticamente** na inicialização.
 
-### Tabela: Users
+## Endpoints da API
 
-| Coluna       | Tipo      | Descrição                    |
-|--------------|-----------|------------------------------|
-| Id           | UUID      | Identificador único          |
-| Name         | string    | Nome do usuário              |
-| Email        | string    | Email (único)                |
-| PasswordHash | string    | Hash da senha                |
-| Role         | string    | Admin ou User                |
-| IsActive     | bool      | Status de ativação           |
-| CreatedAt    | datetime  | Data de criação              |
-| UpdatedAt    | datetime  | Data de atualização          |
-
-## Endpoints Disponíveis
-
-### Users
-
-- `GET /api/users` - Lista todos os usuários ativos
-- `GET /api/users/{id}` - Busca um usuário por ID
-- `POST /api/users` - Cria um novo usuário
-- `PUT /api/users/{id}` - Atualiza um usuário
-- `DELETE /api/users/{id}` - Desativa um usuário (soft delete)
-
-## Configuração Manual de User Secrets
-
-Se preferir configurar manualmente (sem o script):
-
-```bash
-cd src/BaseApi.Api
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=baseapi_dev;Username=postgres;Password=sua_senha"
+### Autenticação
+```http
+POST /api/auth/login
+POST /api/auth/register
 ```
 
-Para listar os secrets configurados:
-
-```bash
-dotnet user-secrets list
+### Usuários (com hierarquia)
+```http
+GET    /api/users              # Lista usuários (filtrado por hierarquia)
+GET    /api/users/{id}         # Busca usuário por ID
+POST   /api/users              # Cria usuário (salva CreatedById)
+PUT    /api/users/{id}         # Atualiza usuário (valida hierarquia)
+DELETE /api/users/{id}         # Soft delete (valida hierarquia)
+GET    /api/users/inactive     # Lista usuários inativos [Authorize]
 ```
 
-Para remover um secret:
-
-```bash
-dotnet user-secrets remove "ConnectionStrings:DefaultConnection"
+### Configurações White-Label
+```http
+GET /api/AppSettings           # Público - retorna configurações
+PUT /api/AppSettings           # Admin raiz - atualiza configurações
 ```
 
-## Exemplo de Connection String PostgreSQL
+## Autenticação JWT
 
-```
-Host=localhost;Port=5432;Database=nome_do_banco;Username=seu_usuario;Password=sua_senha
-```
-
-### Variações Comuns:
-
-**PostgreSQL Local:**
-```
-Host=localhost;Port=5432;Database=baseapi_dev;Username=postgres;Password=postgres
+### Login Request
+```json
+POST /api/auth/login
+{
+  "email": "email@example.com",
+  "password": "pwdexample"
+}
 ```
 
-**PostgreSQL com SSL:**
-```
-Host=seu-servidor.com;Port=5432;Database=baseapi_prod;Username=user;Password=pass;SSL Mode=Require
+### Login Response
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "email": "DEFINA_EMAIL_ROOT",
+  "name": "Administrador",
+  "role": "Admin",
+  "expiresAt": "2026-01-22T08:00:00Z",
+  "createdById": null  // null = admin raiz
+}
 ```
 
-**PostgreSQL em Container Docker:**
+### Usando o Token
+```http
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
-Host=localhost;Port=5433;Database=baseapi_dev;Username=postgres;Password=postgres
+
+## Hierarquia de Administradores
+
+### Criar Usuário (Admin raiz)
+```json
+POST /api/users
+Authorization: Bearer {token_admin_raiz}
+
+{
+  "name": "Novo Admin",
+  "email": "email2@example.com",
+  "password": "pwdexample",
+  "role": "Admin"
+}
 ```
+
+O campo `CreatedById` é preenchido automaticamente com o ID do usuário autenticado.
+
+### Validações de Hierarquia
+- **GET /api/users**: Retorna apenas usuários criados pelo admin logado (ou todos se for admin raiz)
+- **PUT /api/users/{id}**: Bloqueia edição de quem criou você (403 Forbidden)
+- **DELETE /api/users/{id}**: Bloqueia exclusão de quem criou você (403 Forbidden)
+
+## Sistema White-Label
+
+### Obter Configurações (Público)
+```http
+GET /api/AppSettings
+```
+
+```json
+{
+  "brandName": "Minha Empresa",
+  "logoUrl": "https://exemplo.com/logo.png",
+  "primaryColor": "#3B82F6",
+  "secondaryColor": "#8B5CF6",
+  "accentColor": "#22C55E"
+}
+```
+
+### Atualizar Configurações (Admin Raiz)
+```http
+PUT /api/AppSettings
+Authorization: Bearer {token_admin_raiz}
+
+{
+  "brandName": "Nova Marca",
+  "logoUrl": "https://exemplo.com/nova-logo.png",
+  "primaryColor": "#FF5733",
+  "secondaryColor": "#C70039",
+  "accentColor": "#900C3F"
+}
+```
+
+**Importante**: Apenas o admin raiz (sem `CreatedById`) pode alterar as configurações. Admins secundários recebem 403 Forbidden.
 
 ## Migrations do Entity Framework
 
-### Criar uma nova migration:
+### Criar nova migration
 ```bash
-dotnet ef migrations add NomeDaMigration --project src/BaseApi.Infra --startup-project src/BaseApi.Api
+cd src/BaseApi.Infra
+dotnet ef migrations add NomeDaMigration --startup-project ../BaseApi.Api
 ```
 
-### Aplicar migrations pendentes:
+### Aplicar migrations manualmente (não necessário, feito automaticamente)
 ```bash
-dotnet ef database update --project src/BaseApi.Infra --startup-project src/BaseApi.Api
+dotnet ef database update --startup-project ../BaseApi.Api
 ```
 
-### Reverter a última migration:
+### Listar migrations
 ```bash
-dotnet ef migrations remove --project src/BaseApi.Infra --startup-project src/BaseApi.Api
+dotnet ef migrations list --startup-project ../BaseApi.Api
 ```
 
-### Listar todas as migrations:
+### Remover última migration
 ```bash
-dotnet ef migrations list --project src/BaseApi.Infra --startup-project src/BaseApi.Api
+dotnet ef migrations remove --startup-project ../BaseApi.Api
 ```
 
-## Boas Práticas de Segurança
+## Validações e Segurança
 
-1. **NUNCA** commite a Connection String no Git
-2. **NUNCA** coloque senhas no `appsettings.json`
-3. Use **User Secrets** para desenvolvimento local
-4. Use **Azure Key Vault**, **AWS Secrets Manager** ou equivalente em produção
-5. Sempre use variáveis de ambiente em ambientes de CI/CD
-6. Mantenha o `.gitignore` atualizado para evitar commits acidentais
+### Validações de Senha
+- Mínimo 6 caracteres
+- Hash BCrypt automático
+- Senha nunca retornada nas respostas
 
-## Estrutura de Arquivos
+### Validações de Email
+- Formato válido
+- Unicidade garantida
+- Case-insensitive
 
-```
-baseApi/
-├── src/
-│   ├── BaseApi.Domain/
-│   │   ├── Entities/
-│   │   │   ├── BaseEntity.cs
-│   │   │   └── User.cs
-│   │   └── Enums/
-│   │       └── UserRole.cs
-│   ├── BaseApi.Application/
-│   │   ├── Interfaces/
-│   │   └── Services/
-│   ├── BaseApi.Infra/
-│   │   ├── Data/
-│   │   │   └── ApplicationDbContext.cs
-│   │   ├── Repositories/
-│   │   └── DependencyInjection.cs
-│   └── BaseApi.Api/
-│       ├── Controllers/
-│       │   └── UsersController.cs
-│       ├── Program.cs
-│       ├── appsettings.json
-│       └── appsettings.Development.json
-├── setup-dev.ps1
-├── setup-dev.sh
-├── .gitignore
-└── README.md
+### Proteções RBAC
+- `[Authorize]` - Requer autenticação
+- `[Authorize(Roles = "Admin")]` - Requer role Admin
+- `[AllowAnonymous]` - Endpoint público
+
+### Enum Serialization
+Enums são serializados como strings no JSON:
+```json
+{
+  "role": "Admin"  // ✅ string, não número
+}
 ```
 
-## Próximos Passos Sugeridos
+Configurado em `Program.cs`:
+```csharp
+builder.Services.AddControllers()
+    .AddJsonOptions(options => {
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
+```
 
-- Implementar autenticação JWT
-- Adicionar validação de dados (FluentValidation)
-- Implementar padrão Repository
-- Adicionar testes unitários e de integração
-- Configurar logging (Serilog)
-- Implementar rate limiting
-- AdicionarHealthChecks
-- Configurar Docker/Docker Compose
+## Configuração do PostgreSQL (Supabase)
 
-## Contribuindo
+O projeto está configurado para usar Supabase com pooling:
 
-Este é um template base. Sinta-se livre para adaptar conforme as necessidades do seu projeto.
+```csharp
+// DependencyInjection.cs
+services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseNpgsql(connectionString, npgsqlOptions =>
+    {
+        npgsqlOptions.CommandTimeout(60);
+        npgsqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 3,
+            maxRetryDelay: TimeSpan.FromSeconds(10),
+            errorCodesToAdd: null);
+    }));
+```
+
+## Seed Automático
+
+Na primeira execução, o sistema cria automaticamente:
+
+### Admin Padrão configure no arquivo .env
+- Email: `admin@example.com`
+- Senha: `pwdexample`
+- Role: Admin
+- CreatedById: null (admin raiz)
+
+### Configurações Padrão
+- BrandName: "Base API"
+- PrimaryColor: "#3B82F6" (azul)
+- SecondaryColor: "#8B5CF6" (roxo)
+- AccentColor: "#22C55E" (verde)
+
+## CORS
+
+CORS está configurado para aceitar todas as origens em desenvolvimento:
+
+```csharp
+app.UseCors("AllowAll");
+```
+
+Para produção, configure origens específicas em `Program.cs`.
+
+## Swagger/OpenAPI
+
+Swagger está sempre ativo e disponível na raiz:
+- https://localhost:7000
+
+Inclui autenticação JWT:
+1. Clique em "Authorize" no topo
+2. Digite: `Bearer {seu_token}`
+3. Teste endpoints protegidos
 
 ## Licença
 
-MIT License - Use como quiser!
-
----
-
-**Desenvolvido com .NET 8 e Clean Architecture**
+MIT
