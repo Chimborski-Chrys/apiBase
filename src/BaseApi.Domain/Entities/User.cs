@@ -9,4 +9,8 @@ public class User : BaseEntity
     public string PasswordHash { get; set; } = string.Empty;
     public UserRole Role { get; set; } = UserRole.User;
     public bool IsActive { get; set; } = true;
+
+    // Hierarquia de administradores - rastreia quem criou este usuário
+    public Guid? CreatedById { get; set; }
+    public User? CreatedBy { get; set; }
 }

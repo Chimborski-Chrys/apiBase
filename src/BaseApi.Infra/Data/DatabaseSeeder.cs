@@ -30,6 +30,9 @@ public class DatabaseSeeder
             await _context.Database.MigrateAsync();
             _logger.LogInformation("Migrations aplicadas com sucesso");
 
+            // Criar configurações padrão se não existir
+            await SeedAppSettingsAsync();
+
             // Criar usuário admin se não existir
             await SeedAdminUserAsync();
         }
@@ -80,5 +83,32 @@ public class DatabaseSeeder
         await _context.SaveChangesAsync();
 
         _logger.LogInformation("Usuário admin criado com sucesso: {Email}", adminEmail);
+    }
+
+    private async Task SeedAppSettingsAsync()
+    {
+        // Verificar se já existe configuração
+        var settingsExists = await _context.AppSettings.AnyAsync();
+
+        if (settingsExists)
+        {
+            _logger.LogInformation("Configurações da aplicação já existem");
+            return;
+        }
+
+        // Criar configuração padrão
+        var defaultSettings = new AppSettings
+        {
+            BrandName = "Base API",
+            LogoUrl = null,
+            PrimaryColor = "#3B82F6",   // Azul
+            SecondaryColor = "#8B5CF6", // Roxo
+            AccentColor = "#22C55E"     // Verde
+        };
+
+        _context.AppSettings.Add(defaultSettings);
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("Configurações padrão da aplicação criadas com sucesso");
     }
 }

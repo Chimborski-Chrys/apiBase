@@ -11,6 +11,7 @@ public class ApplicationDbContext : DbContext
     }
 
     public DbSet<User> Users => Set<User>();
+    public DbSet<AppSettings> AppSettings => Set<AppSettings>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -41,6 +42,40 @@ public class ApplicationDbContext : DbContext
             entity.Property(e => e.IsActive)
                 .IsRequired()
                 .HasDefaultValue(true);
+
+            entity.Property(e => e.CreatedAt)
+                .IsRequired();
+
+            entity.Property(e => e.UpdatedAt)
+                .IsRequired();
+        });
+
+        modelBuilder.Entity<AppSettings>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.BrandName)
+                .IsRequired()
+                .HasMaxLength(100)
+                .HasDefaultValue("Base API");
+
+            entity.Property(e => e.LogoUrl)
+                .HasMaxLength(500);
+
+            entity.Property(e => e.PrimaryColor)
+                .IsRequired()
+                .HasMaxLength(7)
+                .HasDefaultValue("#3B82F6");
+
+            entity.Property(e => e.SecondaryColor)
+                .IsRequired()
+                .HasMaxLength(7)
+                .HasDefaultValue("#8B5CF6");
+
+            entity.Property(e => e.AccentColor)
+                .IsRequired()
+                .HasMaxLength(7)
+                .HasDefaultValue("#22C55E");
 
             entity.Property(e => e.CreatedAt)
                 .IsRequired();
